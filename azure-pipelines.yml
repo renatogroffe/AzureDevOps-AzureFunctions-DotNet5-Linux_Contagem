@@ -1,0 +1,57 @@
+trigger:
+  - main
+  
+resources:
+- repo: self
+
+variables:
+  buildConfiguration: 'Release'
+  vmImageName: 'ubuntu-latest'
+  artifactFunctionApp: 'functionAppContagemLinux'
+  saudacaoFunctionApp: 'Bem-vindos!!!'
+  avisoFunctionApp: 'Utilizando uma Function App criada em .NET 5 em Linux'
+
+stages:
+- stage: Build
+  displayName: Build da Function App
+  jobs:
+  - job: Build
+    displayName: Build da Function App em .NET
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: Build + Publish gerando Artifact
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '**/FunctionAppContagem.csproj'
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+    - task: PublishPipelineArtifact@1
+      displayName: Publish do Artifact
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)' 
+        artifactName: $(artifactFunctionApp)
+- stage: Deployment
+  displayName: Deployment da Function App em Linux
+  dependsOn: Build
+  jobs:
+  - job: Deployment
+    displayName: Deployment da Function App no Azure
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: DownloadPipelineArtifact@2
+      displayName: Download do Artifact gerado no stage de Build
+      inputs:
+        buildType: 'current'
+        artifactName: $(artifactFunctionApp)
+        targetPath: '$(System.DefaultWorkingDirectory)/publish'
+    - task: AzureFunctionApp@1
+      displayName: Deployment da Function App no Azure em Linux
+      inputs:
+        azureSubscription: 'AZURE SUBSCRIPTION'
+        appType: 'functionAppLinux'
+        appName: 'groffecontadorlinux'
+        package: '$(System.DefaultWorkingDirectory)/**/*.zip'
+        appSettings: '-FUNCTIONS_WORKER_RUNTIME "dotnet-isolated" -Saudacao "$(saudacaoFunctionApp)" -Aviso "$(avisoFunctionApp)"'
